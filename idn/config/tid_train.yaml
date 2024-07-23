@@ -1,5 +1,5 @@
 deterministic: false
-num_epoch: 100
+num_epoch: 1
 run_val: false
 data_loader:
   common:

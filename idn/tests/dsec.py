@@ -8,7 +8,9 @@ import torch
 from tqdm import tqdm
 from ..utils.helper_functions import move_batch_to_cuda
 import time
-
+import numpy as np
+import cv2
+from ..utils.plotting import plot_of_arrows
 
 class TestCO(Test):
     def __init__(self, test_spec):
@@ -117,6 +119,19 @@ def assemble_dsec_test_cls(test_type_name=None):
 
                                     out = forward_pass_fn(batch)
                                     end_time = time.perf_counter()
+
+                                    # get shape of output tensor
+                                    final_prediction = out["final_prediction"]
+                                    # flow = final_prediction[0].cpu().numpy().reshape(480, 640, 2)
+
+                                    flow = final_prediction[0].cpu().numpy().transpose(1, 2, 0)
+
+                                    black_img = np.zeros((flow.shape[0], flow.shape[1], 3), np.uint8)
+                                    flow_viz = plot_of_arrows(black_img, flow, fraction=0.01)
+
+                                    cv2.imshow('flow_arrows', flow_viz)
+                                    if cv2.waitKey(0) & 0xFF == ord('q'):
+                                        cv2.destroyAllWindows()      
                                     #print(f"Forward pass time: {(end_time - start_time):.4f}")
                                     self.evaluator.evaluate(batch, out, idx)
                                     rec.log_tensors(batch, out, idx, save_all)

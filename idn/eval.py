@@ -10,14 +10,14 @@ def test(trainer):
     test_cfg = compose(config_name="validation/dsec_test",
                        overrides=[]).validation
     Validator.get_test_type("dsec")(test_cfg).execute_test(
-        trainer.model, save_all=False)
+        trainer.model, save_all=True)
     
 
 def test_co(trainer):
     test_cfg = compose(config_name="validation/dsec_co",
                        overrides=[]).validation
     Validator.get_test_type("dsec", "co")(
-        test_cfg).execute_test(trainer.model, save_all=False)
+        test_cfg).execute_test(trainer.model, save_all=True)
 
 
 
@@ -33,6 +33,7 @@ def main(config):
     print("Number of parameters: ", sum(p.numel()
           for p in trainer.model.parameters() if p.requires_grad))
 
+    print(f"config: {config}")
 
     if config.model.name == "RecIDE":
         test_co(trainer)

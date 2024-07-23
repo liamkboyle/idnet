@@ -9,6 +9,7 @@ import torch
 from contextlib import contextmanager, nullcontext
 from ..tests.eval import fm
 
+import cv2
 
 class Logger:
     def __init__(self, config, test_name):
@@ -92,8 +93,24 @@ class Logger:
                 flow*128 + 2**15).astype(np.uint16).transpose(1, 2, 0)
             flow_image = np.concatenate((scaled_flow, np.zeros((h, w, 1),
                                         dtype=np.uint16)), axis=-1)
-            imageio.imwrite(os.path.join(self.path, "submission", f"{file_idx:06d}.png"),
-                            flow_image, format='PNG-FI')
+            
+            cv2.imshow('flow_image', flow_image)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                cv2.destroyAllWindows()
+
+            file_path = os.path.join(self.path, "submission", f"{file_idx:06d}_test.png")
+            # imageio.imwrite(os.path.join(self.path, "submission", f"{file_idx:06d}.png"),
+            #                 flow_image)
+            img = np.zeros((512, 512, 3), np.uint8)
+            flow_image = (flow_image / 256).astype(np.uint8)
+            # imageio.imwrite(file_path, img)
+            imageio.imwrite(file_path, flow_image)
+            # convert to 8-bit
+            
+            # imageio.imwrite(os.path.join(self.path, "submission", f"{file_idx:06d}.png"),
+            #                 flow_image, format='PNG-FI')
+
+            a=1
 
         def save_tensor(self, key, value, idx):
             if isinstance(value, torch.Tensor):

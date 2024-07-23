@@ -7,6 +7,7 @@ import weakref
 from time import time
 import cv2
 # import h5pickle as h5py
+import hdf5plugin
 import h5py
 from numba import jit
 import numpy as np
@@ -37,8 +38,25 @@ class EventSlicer:
         self.h5f = h5f
 
         self.events = dict()
+        filename = self.h5f.filename
+        # events = self.h5f['events']
+        # if "custom" or "fake" in filename:
+        #     # events = self.h5f['events/ps']
+        #     for dset_str in ['ps', 'xs', 'ys', 'ts']:
+        #         self.events[dset_str] = self.h5f['events/{}'.format(dset_str)]
+        # else:
         for dset_str in ['p', 'x', 'y', 't']:
             self.events[dset_str] = self.h5f['events/{}'.format(dset_str)]
+
+        if "custom" in filename or "fake" in filename:
+            print("Filename: ", filename)
+            print("X data shape: ", self.events['x'].shape)
+            print("Y data shape: ", self.events['y'].shape)
+            print("P data shape: ", self.events['p'].shape)
+            print("T data shape: ", self.events['t'].shape)
+        
+        print(f"type of events: {type(self.events['x'])}")
+        
 
         # This is the mapping from milliseconds to event index:
         # It is defined such that
@@ -56,7 +74,11 @@ class EventSlicer:
         #       0       2       2       3       3       3       5       5       8       9
         self.ms_to_idx = np.asarray(self.h5f['ms_to_idx'], dtype='int64')
 
-        self.t_offset = int(h5f['t_offset'][()])
+        # self.t_offset = int(h5f['t_offset'][()])
+        self.t_offset = 0
+        # if "custom" in filename:
+        #     self.t_final = int(self.events['ts'][-1]) + self.t_offset
+        # else:
         self.t_final = int(self.events['t'][-1]) + self.t_offset
 
     def get_final_time_us(self):
@@ -74,10 +96,11 @@ class EventSlicer:
         """
         assert t_start_us < t_end_us
 
+        print(f"t_start_us: {t_start_us}")
         # We assume that the times are top-off-day, hence subtract offset:
         t_start_us -= self.t_offset
         t_end_us -= self.t_offset
-
+        print(f"t_start_us offset adjusted: {t_start_us}")
         t_start_ms, t_end_ms = self.get_conservative_window_ms(
             t_start_us, t_end_us)
         t_start_ms_idx = self.ms2idx(t_start_ms)
@@ -90,10 +113,16 @@ class EventSlicer:
         events = dict()
         time_array_conservative = np.asarray(
             self.events['t'][t_start_ms_idx:t_end_ms_idx])
+        print(f"time array conservative: {time_array_conservative}")
         idx_start_offset, idx_end_offset = self.get_time_indices_offsets(
             time_array_conservative, t_start_us, t_end_us)
+        print(f"start offset: {idx_start_offset}")
+        print(f"end offset: {idx_end_offset}")
         t_start_us_idx = t_start_ms_idx + idx_start_offset
         t_end_us_idx = t_start_ms_idx + idx_end_offset
+
+        print(f"t_start_us_idx: {t_start_us_idx}")
+        print(f"t_end_us_idx: {t_end_us_idx}")
         # Again add t_offset to get gps time
         events['t'] = time_array_conservative[idx_start_offset:idx_end_offset] + self.t_offset
         for dset_str in ['p', 'x', 'y']:
@@ -146,6 +175,12 @@ class EventSlicer:
         time_start_us <= time_array[idx_start:idx_end] < time_end_us
         """
 
+        print(f"Time array shape: {len(time_array)}")
+        # print(f"Time array: {type(time_array)}")
+        print(f"Time start us: {time_start_us}")
+        print(f"Time end us: {time_end_us}")
+
+
         assert time_array.ndim == 1
 
         idx_start = -1
@@ -182,6 +217,7 @@ class EventSlicer:
         return idx_start, idx_end
 
     def ms2idx(self, time_ms: int) -> int:
+        print(f"Time_ms: {time_ms}")
         assert time_ms >= 0
         if time_ms >= self.ms_to_idx.size:
             return None
@@ -222,6 +258,8 @@ class Sequence(Dataset):
             timestamps_images = np.loadtxt(
                 flow_path / 'image_timestamps.txt', dtype='int64')
             self.indices = np.arange(len(timestamps_images))[::2][1:-1]
+            print(f"sequence path {seq_path}")
+            print(f"indices shape: {self.indices.shape}")
             self.timestamps_flow = timestamps_images[::2][1:-1]
 
         elif self.mode is "train":
@@ -232,6 +270,7 @@ class Sequence(Dataset):
             timestamp_file = flow_path/'forward_timestamps.txt'
             self.flow_png = [Path(os.path.join(flow_path / 'forward', img)) for img in sorted(
                 os.listdir(flow_path / 'forward'))]
+            
             timestamps_images = np.loadtxt(
                 flow_path / 'forward_timestamps.txt', delimiter=',', dtype='int64')
             self.indices = np.arange(len(timestamps_images) - 1)
@@ -250,6 +289,8 @@ class Sequence(Dataset):
         # Save output dimensions
         self.height = 480
         self.width = 640
+        # self.height = 260
+        # self.width = 346
         self.num_bins = num_bins
 
         # Just for now, we always train with num_bins=15
@@ -285,6 +326,11 @@ class Sequence(Dataset):
         t = (t/t[-1])
         x = x.astype('float32')
         y = y.astype('float32')
+        # Upscale x from 346 to 640 and y from 260 to 480
+        x = x * 640 / 346
+        y = y * 480 / 260
+        
+
         pol = p.astype('float32')
         event_data_torch = {
             'p': torch.from_numpy(pol),
@@ -327,6 +373,8 @@ class Sequence(Dataset):
         rectify_map = self.rectify_ev_map
         assert rectify_map.shape == (
             self.height, self.width, 2), rectify_map.shape
+        print(f"width: {self.width}, height: {self.height}")
+        print(f"x size: {len(x)}, y size: {len(y)}")
         assert x.max() < self.width
         assert y.max() < self.height
         return rectify_map[y, x]
@@ -335,6 +383,8 @@ class Sequence(Dataset):
         # First entry corresponds to all events BEFORE the flow map
         # Second entry corresponds to all events AFTER the flow map (corresponding to the actual fwd flow)
         names = ['event_volume_old', 'event_volume_new']
+        print(f"timestamps flow: {self.timestamps_flow[index]}")
+        print(f"delta t: {self.delta_t_us}")
         ts_start = [self.timestamps_flow[index] -
                     self.delta_t_us, self.timestamps_flow[index]]
         ts_end = [self.timestamps_flow[index],
@@ -350,8 +400,13 @@ class Sequence(Dataset):
         # Save sample for benchmark submission
         output['save_submission'] = file_index in self.idx_to_visualize
         output['visualize'] = self.visualize_samples
+        
 
         for i in range(len(names)):
+            print('hello?')
+            print(f"start time {ts_start[i]}")
+            print('hello22')
+            print(f"end time {ts_end[i]}")
             event_data = self.event_slicer.get_events(
                 ts_start[i], ts_end[i])
 
@@ -359,10 +414,16 @@ class Sequence(Dataset):
             t = event_data['t']
             x = event_data['x']
             y = event_data['y']
+            print(f"number of events: {len(p)}")
 
-            xy_rect = self.rectify_events(x, y)
-            x_rect = xy_rect[:, 0]
-            y_rect = xy_rect[:, 1]
+            # xy_rect = self.rectify_events(x, y)
+            # x_rect = xy_rect[:, 0]
+            # y_rect = xy_rect[:, 1]
+
+            x_rect = x
+            y_rect = y
+            print(f"crops: {crop_window}")
+            crop_window = None
 
             if crop_window is not None:
                 # Cropping (+- 2 for safety reasons)
@@ -521,7 +582,7 @@ class SequenceRecurrent(Sequence):
     def get_continuous_sequences(self):
         continuous_seq_idcs = []
         if self.sequence_length > 1:
-            for i in range(len(self.timestamps_flow)-self.sequence_length+1):
+            for i in range(len(self.timestamps_flow)-self.sequence_length-1):
                 diff = self.timestamps_flow[i +
                                             self.sequence_length-1] - self.timestamps_flow[i]
                 if diff < np.max([100000 * (self.sequence_length-1) + 1000, 101000]):
@@ -534,7 +595,7 @@ class SequenceRecurrent(Sequence):
         return continuous_seq_idcs
 
     def __len__(self):
-        return len(self.valid_indices)
+        return len(self.valid_indices) - 1
 
     def __getitem__(self, idx):
         assert idx >= 0

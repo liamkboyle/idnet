@@ -2,6 +2,7 @@ name: IDNet
 channels:
   - pytorch
   - nvidia
+  # - conda-forge
 dependencies:
   - python=3.8
   - pytorch=1.13.1
@@ -17,12 +18,12 @@ dependencies:
   - imageio
   - ipykernel
   - pip
+  # - opencv
   - pip:
     - torchinfo
     - hydra-core
     - wandb
     - gitignore-parser
-    - opencv-python-headless
     - hdf5plugin
     - nbformat
     - nbstripout

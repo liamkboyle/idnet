@@ -35,6 +35,7 @@ class Trainer(CallbackBridge):
         super().__init__()
         self.config = config
         config_torch(config.torch)
+        print(f"model name: {config.model.name}")
         self.model = model if model is not None else \
             get_model_by_name(config.model.name, config.model)
         if config.model.get("pretrain_ckpt", None):
